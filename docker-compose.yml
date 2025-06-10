@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./tmp:/app/tmp
+    depends_on:
+      - minio
+      - minio-init
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-01-18T00-31-37Z-cpuv1
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=minio@123456
+    volumes:
+      - ./data/minio:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    expose:
+      - 9000
+    command: server /data --console-address ":9001"
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-01-17T23-25-50Z
+    depends_on:
+      - minio
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        /usr/bin/mc alias set minio http://minio:9000 admin minio@123456;
+        /usr/bin/mc mb minio/my-bucket;
+        /usr/bin/mc anonymous set public minio/my-bucket;
+        exit 0;

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>File Chunking Demo</title>
+        <style>
+            .progress {
+                width: 100%;
+                max-width: 500px;
+                height: 20px;
+                background-color: #f0f0f0;
+                border-radius: 10px;
+                margin: 10px 0;
+            }
+            .progress-bar {
+                height: 100%;
+                background-color: #4caf50;
+                border-radius: 10px;
+                width: 0%;
+                transition: width 0.3s ease;
+            }
+            .container {
+                max-width: 600px;
+                margin: 50px auto;
+                padding: 20px;
+                font-family: Arial, sans-serif;
+            }
+            .status {
+                margin-top: 20px;
+                color: #666;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>File Upload with Chunking</h2>
+            <input type="file" id="fileInput" />
+            <button id="uploadButton">Upload</button>
+            <div class="progress">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="status" id="status">Ready to upload</div>
+        </div>
+    </body>
+    <script src="https://cdn.jsdelivr.net/npm/uuid@latest/dist/umd/uuidv4.min.js"></script>
+
+    <script>
+        const fileInput = document.getElementById("fileInput")
+        const uploadButton = document.getElementById("uploadButton")
+        const progressBar = document.getElementById("progressBar")
+        const status = document.getElementById("status")
+        const CHUNK_SIZE = 2 * 1024 * 1024 // 2MB
+
+        uploadButton.addEventListener("click", async () => {
+            const file = fileInput.files[0]
+            if (!file) {
+                status.textContent = "Please select a file first"
+                return
+            }
+
+            const promises = []
+            const key = uuidv4()
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+            let uploadedChunks = 0
+
+            status.textContent = "Uploading chunks..."
+
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * CHUNK_SIZE
+                const end = Math.min(file.size, start + CHUNK_SIZE)
+                const chunk = file.slice(start, end)
+
+                const formData = new FormData()
+                formData.append("file", chunk)
+                formData.append("key", key)
+                formData.append("fileName", `${file.name}-${i}`)
+
+                const promise = fetch("http://127.0.0.1:8080/upload", {
+                    method: "POST",
+                    body: formData,
+                })
+                    .then((response) => response.json())
+                    .then(() => {
+                        uploadedChunks++
+                        const progress = (uploadedChunks / totalChunks) * 100
+                        progressBar.style.width = `${progress}%`
+                    })
+
+                promises.push(promise)
+            }
+
+            try {
+                await Promise.all(promises)
+                status.textContent = "All chunks uploaded. Merging..."
+
+                const formData = new FormData()
+                formData.append("key", key)
+                formData.append("fileName", file.name)
+
+                // Call merge endpoint
+                const mergeResponse = await fetch("http://127.0.0.1:8080/merge", {
+                    method: "POST",
+                    body: formData,
+                })
+
+                const mergeResult = await mergeResponse.json()
+                if (mergeResult.success) {
+                    status.textContent = `File successfully merged! Path: ${mergeResult.path}`
+                } else {
+                    status.textContent = `Error merging file: ${mergeResult.error}`
+                }
+            } catch (error) {
+                console.error(error)
+                status.textContent = "Error during upload or merge"
+            }
+        })
+    </script>
+</html>

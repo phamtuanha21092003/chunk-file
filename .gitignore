@@ -1,0 +1,6 @@
+data/
+tmp/
+vendor/
+chunk-file
+.DS_Store
+__debug_bin*
